@@ -8,21 +8,14 @@ let whiteStartPoints = 0; let blackStartPoints = 0;
 let whiteScore = 0; let blackScore = 0;
 const PIECE_VALUES = { 'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9 };
 
-// --- UI HELPERS ---
 function updatePointsUI() {
-    $('#whiteStart').text(whiteStartPoints);
-    $('#blackStart').text(blackStartPoints);
-    $('#whiteScore').text(whiteScore);
-    $('#blackScore').text(blackScore);
-    
-    const liveWhite = whiteStartPoints - blackScore; 
-    const liveBlack = blackStartPoints - whiteScore; 
-    
+    $('#whiteStart').text(whiteStartPoints); $('#blackStart').text(blackStartPoints);
+    $('#whiteScore').text(whiteScore); $('#blackScore').text(blackScore);
+    const liveWhite = whiteStartPoints - blackScore; const liveBlack = blackStartPoints - whiteScore; 
     const diff = Math.abs(liveWhite - liveBlack);
     let leaderText = "Even";
     if (liveWhite > liveBlack) leaderText = `White +${diff}`;
     if (liveBlack > liveWhite) leaderText = `Black +${diff}`;
-    
     $('#pointDiff').text(leaderText);
 }
 
@@ -30,17 +23,11 @@ function removeHighlights() { $('#myBoard .square-55d63').css('box-shadow', '');
 function highlightSquare(square) { $('#myBoard .square-' + square).css('box-shadow', 'inset 0 0 0 5px rgba(20, 85, 30, 0.5)'); }
 function flashRedSquare(square) {
     const $square = $('#myBoard .square-' + square);
-    // Paint it thick red
     $square.css('box-shadow', 'inset 0 0 0 5px rgba(255, 0, 0, 0.8)');
-    
-    // Automatically remove the red highlight after 0.4 seconds
-    setTimeout(() => {
-        $square.css('box-shadow', '');
-    }, 400); 
+    setTimeout(() => { $square.css('box-shadow', ''); }, 400); 
 }
 
 function updateStatus() {
-    // SAFETY NET: Don't check status if the game hasn't started yet!
     if (game === null) return; 
 
     let statusText = '';
@@ -49,36 +36,31 @@ function updateStatus() {
     if (game.in_checkmate()) {
         let winner = moveColor === 'White' ? 'Black' : 'White';
         statusText = `Game Over! ${winner} wins by Checkmate.`;
-        $('#resetBtn').text('Find New Match').show(); 
+        if (myColor !== 'spectator') $('#resetBtn').text('Next Match (Winner Stays)').show(); 
     } else if (game.in_draw()) {
         statusText = 'Game Over! Drawn position.';
-        $('#resetBtn').text('Find New Match').show(); 
+        if (myColor !== 'spectator') $('#resetBtn').text('Next Match (Swap Players)').show(); 
     } else {
         statusText = `${moveColor} to move`;
         if (game.in_check()) statusText += ` (Check!)`;
     }
     
-    let myColorName = myColor === 'w' ? 'White' : 'Black';
+    let myColorName = myColor === 'w' ? 'White' : (myColor === 'b' ? 'Black' : 'Spectator');
     $('#status').text(`You are ${myColorName}. ${statusText}`);
 }
 
 // --- MULTIPLAYER LOGIC ---
-
 socket.on('waitingForOpponent', () => {
     $('#status').text('Waiting for an opponent to join...');
+    $('#spectatorLabel').hide();
 });
 
-socket.on('opponentDisconnected', () => {
-    $('#status').text('Opponent disconnected! You win by forfeit.');
-    $('#resetBtn').text('Find New Match').show(); 
-});
-
-// The server sends us the finalized board
 socket.on('startGame', (data) => {
     myColor = data.color;
+    $('#spectatorLabel').hide(); // Hide the spectator warning
+    $('#resetBtn').hide();
     
-    whiteStartPoints = data.setup.whitePoints;
-    blackStartPoints = data.setup.blackPoints;
+    whiteStartPoints = data.setup.whitePoints; blackStartPoints = data.setup.blackPoints;
     whiteScore = 0; blackScore = 0;
     updatePointsUI();
 
@@ -91,37 +73,22 @@ socket.on('startGame', (data) => {
         pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
         
         onDragStart: function(source, piece) {
-            if (game.game_over() || game.turn() !== myColor || piece.charAt(0) !== myColor) {
-                return false;
-            }
-            
+            if (game.game_over() || game.turn() !== myColor || piece.charAt(0) !== myColor) return false;
             const moves = game.moves({ square: source, verbose: true });
-            
-            // IF PIECE IS TRAPPED OR YOU ARE IN CHECK:
-            if (moves.length === 0) {
-                flashRedSquare(source); // Flash the piece red!
-                return false;
-            }
-            
+            if (moves.length === 0) { flashRedSquare(source); return false; }
             highlightSquare(source);
             moves.forEach(m => highlightSquare(m.to));
         },
         
         onDrop: function(source, target) {
             removeHighlights();
-            
-            // Ignore if they just clicked the piece and put it back down
             if (source === target) return 'snapback';
 
             const move = game.move({ from: source, to: target, promotion: 'q' });
-            
-            // IF ILLEGAL DROP:
-            if (move === null) {
-                flashRedSquare(target); // Flash the invalid target square red!
-                return 'snapback';
-            }
+            if (move === null) { flashRedSquare(target); return 'snapback'; }
 
-            socket.emit('makeMove', { source: source, target: target });
+            // Include the new FEN so spectators stay in sync!
+            socket.emit('makeMove', { source: source, target: target, newFen: game.fen() });
 
             if (move.captured) {
                 if (move.color === 'w') whiteScore += PIECE_VALUES[move.captured];
@@ -130,17 +97,37 @@ socket.on('startGame', (data) => {
             }
         },
         
-        onSnapEnd: function() {
-            board.position(game.fen());
-            updateStatus();
-        }
+        onSnapEnd: function() { board.position(game.fen()); updateStatus(); }
     };
 
     board = Chessboard('myBoard', config);
     updateStatus();
 });
 
-socket.on('opponentMove', (moveData) => {
+// If you are in the queue, you get this instead!
+socket.on('spectatorUpdate', (data) => {
+    myColor = 'spectator';
+    $('#spectatorLabel').show(); // Flash the red warning
+    $('#resetBtn').hide();
+    
+    whiteStartPoints = data.setup.whitePoints; blackStartPoints = data.setup.blackPoints;
+    
+    // We don't know the exact score if we joined mid-game, but we can set the board up
+    game = new Chess(data.currentFen);
+    
+    const config = {
+        draggable: false, // Spectators CANNOT touch the pieces!
+        position: data.currentFen,
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+    };
+
+    board = Chessboard('myBoard', config);
+    updatePointsUI();
+    updateStatus();
+});
+
+// Replaces 'opponentMove'. Updates the board for the opponent AND all spectators.
+socket.on('updateBoard', (moveData) => {
     const move = game.move({ from: moveData.source, to: moveData.target, promotion: 'q' });
     
     if (move && move.captured) {
@@ -153,11 +140,11 @@ socket.on('opponentMove', (moveData) => {
     updateStatus();
 });
 
-// --- RESET LOGIC ---
+// --- WINNER STAYS ON BUTTON ---
 $('#resetBtn').on('click', () => {
-    // Refresh the page to cleanly drop back into the matchmaking queue
-    window.location.reload();
+    $('#resetBtn').hide();
+    // Tell the server we want to go again. Pass our color so it knows who won and who to kick out.
+    socket.emit('nextMatch', myColor);
 });
 
-// Set the 0's on the screen when the page first loads
 updatePointsUI();
