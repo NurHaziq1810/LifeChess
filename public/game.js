@@ -31,8 +31,10 @@ function updateStatus() {
     if (game.in_checkmate()) {
         let winner = moveColor === 'White' ? 'Black' : 'White';
         statusText = `Game Over! ${winner} wins by Checkmate.`;
+        $('#resetBtn').text('Find New Match').show();
     } else if (game.in_draw()) {
         statusText = 'Game Over! Drawn position.';
+        $('#resetBtn').text('Find New Match').show();
     } else {
         statusText = `${moveColor} to move`;
         if (game.in_check()) statusText += ` (Check!)`;
@@ -51,6 +53,9 @@ socket.on('waitingForOpponent', () => {
 
 socket.on('opponentDisconnected', () => {
     $('#status').text('Opponent disconnected! You win by forfeit.');
+
+    //Resets the screen back to the original
+    $('#resetBtn').text('Find New Match').show();
 });
 
 // The server sends us the finalized board and our color
@@ -120,6 +125,11 @@ socket.on('opponentMove', (moveData) => {
         else blackScore += PIECE_VALUES[move.captured];
         updatePointsUI();
     }
+
+    // --- RESET LOGIC ---
+    $('#resetBtn').on('click', () => {
+    // Refresh the page to cleanly drop back into the matchmaking queue
+    window.location.reload();
     
     // Update our visual board
     board.position(game.fen());
