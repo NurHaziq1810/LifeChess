@@ -28,6 +28,16 @@ function updatePointsUI() {
 
 function removeHighlights() { $('#myBoard .square-55d63').css('box-shadow', ''); }
 function highlightSquare(square) { $('#myBoard .square-' + square).css('box-shadow', 'inset 0 0 0 5px rgba(20, 85, 30, 0.5)'); }
+function flashRedSquare(square) {
+    const $square = $('#myBoard .square-' + square);
+    // Paint it thick red
+    $square.css('box-shadow', 'inset 0 0 0 5px rgba(255, 0, 0, 0.8)');
+    
+    // Automatically remove the red highlight after 0.4 seconds
+    setTimeout(() => {
+        $square.css('box-shadow', '');
+    }, 400); 
+}
 
 function updateStatus() {
     // SAFETY NET: Don't check status if the game hasn't started yet!
@@ -84,16 +94,32 @@ socket.on('startGame', (data) => {
             if (game.game_over() || game.turn() !== myColor || piece.charAt(0) !== myColor) {
                 return false;
             }
+            
             const moves = game.moves({ square: source, verbose: true });
-            if (moves.length === 0) return false;
+            
+            // IF PIECE IS TRAPPED OR YOU ARE IN CHECK:
+            if (moves.length === 0) {
+                flashRedSquare(source); // Flash the piece red!
+                return false;
+            }
+            
             highlightSquare(source);
             moves.forEach(m => highlightSquare(m.to));
         },
         
         onDrop: function(source, target) {
             removeHighlights();
+            
+            // Ignore if they just clicked the piece and put it back down
+            if (source === target) return 'snapback';
+
             const move = game.move({ from: source, to: target, promotion: 'q' });
-            if (move === null) return 'snapback';
+            
+            // IF ILLEGAL DROP:
+            if (move === null) {
+                flashRedSquare(target); // Flash the invalid target square red!
+                return 'snapback';
+            }
 
             socket.emit('makeMove', { source: source, target: target });
 
