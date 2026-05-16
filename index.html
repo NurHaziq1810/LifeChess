@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Life Chess</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; margin-top: 50px; }
+        #myBoard { width: 500px; margin-bottom: 20px; }
+        .info { font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+
+    <h2>Life Chess</h2>
+    
+    <h3 id="status">Loading...</h3>
+    <button id="resetBtn" style="display: none; margin-bottom: 15px; padding: 10px 20px; font-size: 1rem; cursor: pointer;">Play Again</button>
+    
+    <div id="myBoard"></div>
+
+    <div class="info" style="text-align: center; margin-bottom: 20px;">
+        <p>
+            <strong>White</strong> | 
+            Starting Army: <span id="whiteStart">0</span> | 
+            Captured Score: <span id="whiteScore" style="color: green; font-weight: bold;">0</span>
+        </p>
+        <p>
+            <strong>Black</strong> | 
+            Starting Army: <span id="blackStart">0</span> | 
+            Captured Score: <span id="blackScore" style="color: green; font-weight: bold;">0</span>
+        </p>
+        <p>Current Board Advantage: <strong><span id="pointDiff">0</span></strong></p>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
